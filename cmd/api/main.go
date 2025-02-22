@@ -1,13 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/Dylan-Oleary/go-social/internal/db"
 	"github.com/Dylan-Oleary/go-social/internal/env"
 	"github.com/Dylan-Oleary/go-social/internal/store"
 )
+
+const version = "0.0.1"
 
 func main() {
 	err := env.LoadEnv()
@@ -23,10 +24,10 @@ func main() {
 			maxIdleConns: env.GetInt("DB_MAX_IDLE_CONNS", 30),
 			maxIdleTime:  env.GetString("DB_MAX_IDLE_TIME", "15m"),
 		},
+		env: env.GetString("ENV", "development"),
 	}
 	db, err := db.New(cfg.db.addr, cfg.db.maxOpenConns, cfg.db.maxIdleConns, cfg.db.maxIdleTime)
 	if err != nil {
-		fmt.Println(cfg.db)
 		log.Panic(err)
 	}
 
