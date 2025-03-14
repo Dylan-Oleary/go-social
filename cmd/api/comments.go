@@ -35,5 +35,5 @@ func (app *application) addCommentsToPostHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, comment)
+	app.jsonResponse(w, http.StatusCreated, comment)
 }
