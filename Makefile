@@ -25,6 +25,10 @@ db-migrate-down-all:
 db-reset:
 	@make db-migrate-down-all && make db-migrate-up && make db-seed
 
-.PHONE: db-seed
+.PHONY: db-seed
 db-seed:
 	@go run ./cmd/migrate/seed/main.go
+
+.PHONY: gen-docs
+gen-docs:
+	@swag init -g ./api/main.go -d cmd,internal && swag fmt
