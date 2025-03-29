@@ -9,6 +9,10 @@ func (app *application) badRequestError(w http.ResponseWriter, err error) {
 	writeJSONError(w, http.StatusBadRequest, err.Error())
 }
 
+func (app *application) conflictError(w http.ResponseWriter, err error) {
+	writeJSONError(w, http.StatusConflict, err.Error())
+}
+
 func (app *application) internalServerError(w http.ResponseWriter, r *http.Request, err error) {
 	log.Printf("Internal server error: %s path: %s error: %s", r.Method, r.URL.Path, err.Error())
 

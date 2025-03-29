@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 
 	"github.com/lib/pq"
 )
@@ -18,6 +19,12 @@ type Post struct {
 	CreatedAt string    `json:"created_at"`
 	UpdatedAt string    `json:"updated_at"`
 	Comments  []Comment `json:"comments"`
+	User      User      `json:"user"`
+}
+
+type PostWithMetadata struct {
+	Post
+	CommentCount int `json:"comments_count"`
 }
 
 type PostStore struct {
@@ -90,6 +97,78 @@ func (s *PostStore) GetByID(ctx context.Context, id int64) (*Post, error) {
 	}
 
 	return &post, nil
+}
+
+func (s *PostStore) GetUserFeed(ctx context.Context, userId int64, fq PaginationFeedQuery) ([]PostWithMetadata, error) {
+	args := []interface{}{userId, fq.Search, pq.Array(fq.Tags), fq.Limit, fq.Offset}
+
+	// Base Query
+	query := `
+        SELECT
+            p.id, p.user_id, p.title, p.content, p.created_at, p.version, p.tags,
+            u.username,
+            COUNT(c.id) as comments_count
+        FROM posts p
+        LEFT JOIN comments c ON c.post_id = p.id
+        LEFT JOIN users u ON u.id = p.user_id
+        LEFT JOIN followers f ON f.follower_id = $1 AND f.user_id = p.user_id
+        WHERE 
+            f.follower_id = $1 AND
+            (p.title ILIKE '%' || $2 || '%' OR p.content ILIKE '%' || $2 || '%') AND
+            (p.tags @> $3 OR $3 = '{}') 
+    `
+
+	// Dates
+	if fq.Since != "" {
+		query += ` AND p.created_at > $` + strconv.Itoa(len(args)+1) + `::timestamp`
+		args = append(args, fq.Since)
+	}
+	if fq.Until != "" {
+		query += ` AND p.created_at < $` + strconv.Itoa(len(args)+1) + `::timestamp`
+		args = append(args, fq.Until)
+	}
+
+	// Sorting, Pagination
+	query += `
+        GROUP BY p.id, u.username
+        ORDER BY p.created_at ` + fq.Sort + `
+        LIMIT $4
+        OFFSET $5;
+    `
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var feed []PostWithMetadata
+	for rows.Next() {
+		var post PostWithMetadata
+		err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&post.Title,
+			&post.Content,
+			&post.CreatedAt,
+			&post.Version,
+			pq.Array(&post.Tags),
+			&post.User.Username,
+			&post.CommentCount,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		feed = append(feed, post)
+	}
+
+	return feed, nil
 }
 
 func (s *PostStore) DeleteByID(ctx context.Context, id int64) error {
