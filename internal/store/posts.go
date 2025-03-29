@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 
 	"github.com/lib/pq"
 )
@@ -98,7 +99,10 @@ func (s *PostStore) GetByID(ctx context.Context, id int64) (*Post, error) {
 	return &post, nil
 }
 
-func (s *PostStore) GetUserFeed(ctx context.Context, userId int64) ([]PostWithMetadata, error) {
+func (s *PostStore) GetUserFeed(ctx context.Context, userId int64, fq PaginationFeedQuery) ([]PostWithMetadata, error) {
+	args := []interface{}{userId, fq.Search, pq.Array(fq.Tags), fq.Limit, fq.Offset}
+
+	// Base Query
 	query := `
         SELECT
             p.id, p.user_id, p.title, p.content, p.created_at, p.version, p.tags,
@@ -108,15 +112,34 @@ func (s *PostStore) GetUserFeed(ctx context.Context, userId int64) ([]PostWithMe
         LEFT JOIN comments c ON c.post_id = p.id
         LEFT JOIN users u ON u.id = p.user_id
         LEFT JOIN followers f ON f.follower_id = $1 AND f.user_id = p.user_id
-        WHERE f.follower_id = $1 OR p.user_id = $1
+        WHERE 
+            f.follower_id = $1 AND
+            (p.title ILIKE '%' || $2 || '%' OR p.content ILIKE '%' || $2 || '%') AND
+            (p.tags @> $3 OR $3 = '{}') 
+    `
+
+	// Dates
+	if fq.Since != "" {
+		query += ` AND p.created_at > $` + strconv.Itoa(len(args)+1) + `::timestamp`
+		args = append(args, fq.Since)
+	}
+	if fq.Until != "" {
+		query += ` AND p.created_at < $` + strconv.Itoa(len(args)+1) + `::timestamp`
+		args = append(args, fq.Until)
+	}
+
+	// Sorting, Pagination
+	query += `
         GROUP BY p.id, u.username
-        ORDER BY p.created_at DESC;
+        ORDER BY p.created_at ` + fq.Sort + `
+        LIMIT $4
+        OFFSET $5;
     `
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, userId)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
