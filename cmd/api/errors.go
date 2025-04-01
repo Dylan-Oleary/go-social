@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 )
 
@@ -14,7 +13,7 @@ func (app *application) conflictError(w http.ResponseWriter, err error) {
 }
 
 func (app *application) internalServerError(w http.ResponseWriter, r *http.Request, err error) {
-	log.Printf("Internal server error: %s path: %s error: %s", r.Method, r.URL.Path, err.Error())
+	app.logger.Errorw("Internal server Error", "method", r.Method, "path", r.URL.Path, "error", err.Error())
 
 	writeJSONError(w, http.StatusInternalServerError, "the server encountered a problem")
 }
