@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -114,18 +115,22 @@ var mockComments = []string{
 	"This gave me a new way to look at things.", "Very well put!", "So many great takeaways here!",
 }
 
-func Seed(store store.Storage) error {
+func Seed(store store.Storage, db *sql.DB) error {
 	log.Println("Beginning database seed...")
 
 	ctx := context.Background()
 	users := generateUsers()
+	tx, _ := db.BeginTx(ctx, nil)
 
 	for _, user := range users {
-		if err := store.Users.Create(ctx, user); err != nil {
+		if err := store.Users.Create(ctx, user, tx); err != nil {
+			_ = tx.Rollback()
 			log.Fatal("Error creating mock user: ", err)
 			return err
 		}
 	}
+
+	tx.Commit()
 
 	posts := generatePosts(100, users)
 
@@ -189,7 +194,6 @@ func generateUsers() []*store.User {
 		users[i] = &store.User{
 			Username: mockUsername,
 			Email:    fmt.Sprintf("%s@gmail.com", mockUsername),
-			Password: "password",
 		}
 	}
 
