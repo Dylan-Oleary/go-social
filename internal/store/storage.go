@@ -30,7 +30,9 @@ type Storage struct {
 		Update(ctx context.Context, p *Post) error
 	}
 	Users interface {
-		Create(ctx context.Context, u *User) error
+		Activate(ctx context.Context, token string) error
+		Create(ctx context.Context, u *User, tx *sql.Tx) error
+		CreateAndInvite(ctz context.Context, u *User, token string, invitationExp time.Duration) error
 		GetByID(ctx context.Context, id int64) (*User, error)
 	}
 }
@@ -42,4 +44,18 @@ func NewStorage(db *sql.DB) Storage {
 		Posts:     &PostStore{db},
 		Users:     &UserStore{db},
 	}
+}
+
+func withTx(db *sql.DB, ctx context.Context, fn func(*sql.Tx) error) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
