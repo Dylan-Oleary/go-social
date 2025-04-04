@@ -100,6 +100,20 @@ func (s *UserStore) Create(ctx context.Context, user *User, tx *sql.Tx) error {
 	return nil
 }
 
+func (s *UserStore) Delete(ctx context.Context, userId int64) error {
+	return withTx(s.db, ctx, func(tx *sql.Tx) error {
+		if err := s.delete(ctx, tx, userId); err != nil {
+			return err
+		}
+
+		if err := s.deleteUserInvitations(ctx, tx, userId); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
 func (s *UserStore) GetByID(ctx context.Context, id int64) (*User, error) {
 	query := `
         SELECT id, email, username, created_at 
@@ -155,6 +169,20 @@ func (s *UserStore) createUserInvitation(ctx context.Context, tx *sql.Tx, token 
 	if _, err := tx.ExecContext(ctx, query, token, userID, time.Now().Add(invitationExp)); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *UserStore) delete(ctx context.Context, tx *sql.Tx, id int64) error {
+	query := `DELETE FROM users WHERE id = $1`
+
+	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer cancel()
+
+	_, err := tx.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

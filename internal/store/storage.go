@@ -33,6 +33,7 @@ type Storage struct {
 		Activate(ctx context.Context, token string) error
 		Create(ctx context.Context, u *User, tx *sql.Tx) error
 		CreateAndInvite(ctz context.Context, u *User, token string, invitationExp time.Duration) error
+		Delete(ctx context.Context, userId int64) error
 		GetByID(ctx context.Context, id int64) (*User, error)
 	}
 }
